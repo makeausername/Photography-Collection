@@ -1,0 +1,10 @@
+    <section id="works" class="works-section" aria-labelledby="works-title">
+      <div class="section-shell">
+        <div class="chapter-line"><span>01 / 摄影作品</span><span lang="en">SELECTED PHOTOGRAPHS</span></div>
+        <div class="section-heading"><div><{{headingTag}} id="works-title">摄影作品</{{headingTag}}><p class="section-description">以自然风光为主，偶尔也拍人像。</p></div><span id="photo-count" class="work-count"></span></div>
+        <form id="public-search" class="public-search" role="search"><label for="search-query">查找作品</label><div><input id="search-query" name="q" type="search" maxlength="100" placeholder="作品名、拍摄地点或年份"><button type="submit">搜索</button><button type="button" id="clear-search" hidden>清除</button></div></form><div class="collection-toolbar"><div id="filters" class="filters" aria-label="筛选作品分类"></div><span class="collection-hint">点击照片查看大图 <span aria-hidden="true">↗</span></span></div>
+        <div id="gallery" class="gallery" aria-live="polite"><p class="empty-state">正在加载作品…</p></div>
+        <div id="gallery-pagination" class="gallery-pagination" hidden><p id="gallery-progress" role="status"></p><button id="load-more" type="button" class="load-more" aria-controls="gallery">加载更多作品 <span aria-hidden="true">↓</span></button></div>
+        <p id="demo-note" class="demo-note" hidden><span aria-hidden="true">○</span> 示例图片 · 作者与来源见详情。</p>
+      </div>
+    </section>

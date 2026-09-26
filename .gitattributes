@@ -6,5 +6,7 @@
 *.json text eol=lf
 *.md text eol=lf
 *.yaml text eol=lf
+*.sh text eol=lf
+Caddyfile text eol=lf
 *.cmd text eol=crlf
 *.jpg binary

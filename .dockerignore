@@ -4,3 +4,7 @@ data
 tests
 *.zip
 *.log
+.git
+.deployment
+release
+.env.*

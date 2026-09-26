@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{description}}">
+  <title>{{title}}</title>
+  {{shareMeta}}
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/portfolio.css">
+  <link rel="stylesheet" href="/vendor/pannellum/pannellum.css">
+  <script src="/vendor/pannellum/pannellum.js" defer></script>
+  <script src="/gallery.js" type="module"></script>
+</head>
+<body class="portfolio-page {{pageClass}}" data-page="{{page}}" data-work-id="{{workId}}" data-series-id="{{seriesId}}">
+  <a class="skip-link" href="#main-content">跳到内容</a>
+  <header class="site-header" id="top">
+    <a href="/" class="brand"><span class="brand-mark" aria-hidden="true"></span><span id="brand">{{siteName}}</span><span class="brand-sub" id="subtitle">{{subtitle}}</span></a>
+    <nav aria-label="主导航"><a href="/works"{{worksCurrent}}>摄影作品</a><a href="/panoramas"{{panoramasCurrent}}>360° 全景</a><a href="/about"{{aboutCurrent}}>关于</a></nav>
+  </header>
+  <main id="main-content">{{content}}</main>
+  <footer class="site-footer" aria-label="网站页脚">
+    <div class="section-shell">
+      <div class="footer-main"><p class="footer-copyright">© {{year}} <a href="/" id="footer-name">{{siteName}}</a></p><div class="footer-links">{{footerContacts}}<button class="page-share-button" data-page-share="site">分享网站 ↗</button><a href="#top">回到顶部 ↑</a></div></div>
+      {{filing}}
+    </div>
+  </footer>
+  <dialog id="viewer-dialog" class="viewer-dialog"><div class="viewer-top"><span id="viewer-kind">摄影作品</span><div class="viewer-actions"><button id="share-work" class="share-trigger">↗ 分享作品</button><button id="close-viewer" class="icon-button" aria-label="关闭作品">×</button></div></div><nav class="viewer-navigation" aria-label="连续浏览"><button id="viewer-previous" aria-label="上一幅作品">←</button><span id="viewer-position" role="status"></span><a id="viewer-page" href="/works">作品详情 ↗</a><button id="viewer-next" aria-label="下一幅作品">→</button></nav><div id="viewer-stage" class="viewer-stage"></div><div class="viewer-bottom"><div><h2 id="viewer-title"></h2><p id="viewer-description"></p><p id="viewer-protection" class="viewer-protection"></p><p id="viewer-credit" class="credit"></p></div><span id="viewer-meta"></span></div></dialog>
+  <dialog id="share-dialog" class="share-dialog" aria-labelledby="share-heading">
+    <div class="share-header"><h2 id="share-heading">分享作品</h2><button id="close-share" class="share-close" aria-label="关闭分享">×</button></div>
+    <p id="share-title" class="share-work-title"></p>
+    <p id="share-status" role="status"></p>
+    <div id="share-content" hidden>
+      <div class="share-platforms" aria-label="分享平台"><button data-share-platform="wechat" aria-pressed="true">微信</button><button data-share-platform="xhs" aria-pressed="false">小红书</button></div>
+      <div class="share-layout">
+        <div class="share-preview"><p id="share-image-label"></p><img id="share-card" width="1200" height="630" alt="作品链接封面"><img id="share-poster" width="1080" height="1440" alt="作品分享图片" hidden></div>
+        <div class="share-options">
+          <section id="share-wechat"><p id="wechat-help"></p><button id="system-share" class="share-primary" hidden>选择应用分享</button><button id="wechat-menu" class="share-primary" hidden>如何转发</button><button id="copy-share-link" class="share-primary">复制链接到微信</button><details class="share-link-details"><summary>查看链接</summary><input id="share-link" aria-label="作品链接" readonly></details><details id="share-qr-details"><summary>用手机微信打开</summary><div class="share-qr-row"><img id="share-qr" alt="作品二维码"><p>用手机微信扫描二维码。</p></div></details></section>
+          <section id="share-xhs" hidden><p>保存图片，在小红书发布笔记。</p><textarea id="share-caption" aria-label="分享配文" rows="4" readonly></textarea><button id="copy-share-caption" class="share-primary">复制配文</button></section>
+          <a id="save-poster" class="share-save" download="KosmoYonder-share.jpg">保存图片</a>
+        </div>
+      </div><p id="share-local" class="share-local" hidden>当前链接仅在本机可用。</p>
+    </div>
+  </dialog>
+  <div id="toast" role="status" class="toast" hidden></div>
+</body>
+</html>

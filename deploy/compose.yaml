@@ -1,0 +1,64 @@
+services:
+  portfolio:
+    image: kosmoyonder-portfolio:local
+    build:
+      context: ..
+    init: true
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "4173"
+      DATA_DIR: /app/data
+      BACKUP_DIR: /app/backups
+      TRUST_PROXY: "1"
+      PUBLIC_BASE_URL: https://${DOMAIN:?请先运行 deploy.sh}
+      STORAGE_PROVIDER: local
+    volumes:
+      - ../.deployment/data:/app/data
+      - ../.deployment/backups:/app/backups
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173/api/session').then(r=>{if(!r.ok)process.exit(1);return r.json()}).then(d=>{if(d.setupRequired)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?请先运行 deploy.sh}
+      DEPLOYMENT_ID: ${DEPLOYMENT_ID:?请先运行 deploy.sh}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../.deployment/caddy-data:/data
+      - ../.deployment/caddy-config:/config
+    depends_on:
+      portfolio:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+  initialize:
+    image: kosmoyonder-portfolio:local
+    profiles: ["setup"]
+    user: "0:0"
+    environment:
+      DOMAIN: ${DOMAIN:?请先运行 deploy.sh}
+      DEPLOYMENT_ID: ${DEPLOYMENT_ID:?请先运行 deploy.sh}
+      DEPLOYMENT_DIR: /deployment
+      DEPLOYMENT_SOURCE: ${DEPLOYMENT_SOURCE:-}
+    volumes:
+      - ../.deployment:/deployment
+    command: ["node", "scripts/deploy-state.mjs", "initialize"]

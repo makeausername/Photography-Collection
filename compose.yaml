@@ -7,6 +7,19 @@ services:
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在.env中设置至少12个字符的管理员密码}
       TRUST_PROXY: "1"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      OSS_REGION: ${OSS_REGION:-oss-cn-hangzhou}
+      OSS_BUCKET: ${OSS_BUCKET:-}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+      OSS_PUBLIC_BASE_URL: ${OSS_PUBLIC_BASE_URL:-}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-}
+      OSS_PREFIX: ${OSS_PREFIX:-portfolio}
+      OSS_URL_TTL: ${OSS_URL_TTL:-300}
+      OSS_STS_TOKEN: ${OSS_STS_TOKEN:-}
+      CDN_BASE_URL: ${CDN_BASE_URL:-}
+      CDN_AUTH_KEY: ${CDN_AUTH_KEY:-}
     volumes:
       - portfolio-data:/app/data
 volumes:

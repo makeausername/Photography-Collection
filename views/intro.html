@@ -1,0 +1,15 @@
+    <section class="intro" aria-label="首页精选作品" aria-roledescription="轮播">
+      <h1 id="home-title" class="visually-hidden">{{siteName}} · {{subtitle}}</h1>
+      <div id="hero-image" class="hero-image" aria-hidden="true"></div>
+      <div class="hero-shade"></div>
+      <button id="hero-toggle" class="hero-toggle" type="button" aria-label="暂停轮播" title="暂停轮播" hidden>
+        <svg class="hero-pause-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4v12M13 4v12" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <svg class="hero-play-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 10 7-10 7Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="hero-bottom">
+        <a id="hero-caption" class="hero-caption" href="/works" hidden><span id="hero-title" class="hero-title"></span><span id="hero-location" class="hero-location"></span></a>
+        <div class="hero-bottom-actions">
+        <a href="/works" class="hero-link">浏览作品 <span aria-hidden="true">↗</span></a></div>
+      </div>
+      <p id="hero-status" class="visually-hidden" role="status" aria-live="polite"></p>
+    </section>
