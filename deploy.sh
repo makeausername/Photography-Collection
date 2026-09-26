@@ -102,7 +102,7 @@ check_project(){
   while read -r container; do
     [[ -n "$container" ]] || continue
     workdir=$(docker_local inspect --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$container")
-    [[ "$workdir" == "$ROOT/deploy/compose.yaml" ]] || die '发现另一目录的 kosmoyonder 部署，未修改。请回到原目录操作。'
+    [[ "$workdir" == "$ROOT/deploy/compose.yaml" || "$workdir" == "$ROOT/deploy/compose.yaml,$STATE/compose.override.yaml" ]] || die '发现另一目录的 kosmoyonder 部署，未修改。请回到原目录操作。'
   done < <(docker_local ps -aq --filter label=com.docker.compose.project=kosmoyonder)
 }
 check_ports(){
