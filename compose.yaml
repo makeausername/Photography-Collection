@@ -1,0 +1,13 @@
+services:
+  portfolio:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4173:4173"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在.env中设置至少12个字符的管理员密码}
+      TRUST_PROXY: "1"
+    volumes:
+      - portfolio-data:/app/data
+volumes:
+  portfolio-data:

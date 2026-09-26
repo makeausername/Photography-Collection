@@ -1,0 +1,57 @@
+{
+  "purpose": "DEMO stock assets only; none are the site owner's photographs.",
+  "assets": [
+    {
+      "file": "moraine-lake.jpg",
+      "title": "Moraine Lake / 梦莲湖",
+      "author": "Gorgo",
+      "dimensions": [2048,1536],
+      "source": "https://commons.wikimedia.org/wiki/File:Moraine_Lake_17092005.jpg",
+      "download": "https://upload.wikimedia.org/wikipedia/commons/c/c5/Moraine_Lake_17092005.jpg",
+      "license": "Public domain (released by copyright holder)",
+      "attribution": "DEMO 素材 · Gorgo / Wikimedia Commons · Public domain",
+      "changes": "None; original JPEG downloaded"
+    },
+    {
+      "file": "wan-caza-dunes.jpg",
+      "title": "Wan Caza Dunes, Libya / 撒哈拉沙丘",
+      "author": "Luca Galuzzi - www.galuzzi.it",
+      "dimensions": [2000,1333],
+      "source": "https://commons.wikimedia.org/wiki/File:Libya_5230_Wan_Caza_Dunes_Luca_Galuzzi_2007.jpg",
+      "download": "https://upload.wikimedia.org/wikipedia/commons/e/e6/Libya_5230_Wan_Caza_Dunes_Luca_Galuzzi_2007.jpg",
+      "license": "CC BY-SA 2.5",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.5/",
+      "attribution": "DEMO 素材 · Luca Galuzzi - www.galuzzi.it · CC BY-SA 2.5",
+      "changes": "None; original JPEG downloaded. Indicate any website display crop and keep adaptations under CC BY-SA 2.5.",
+      "displayNote": "Place credit in immediate vicinity of image, link author and license."
+    },
+    {
+      "file": "seljalandsfoss.jpg",
+      "title": "Seljalandsfoss, Iceland / 冰岛瀑布",
+      "author": "Robert Lukeman",
+      "dimensions": [3840,2323],
+      "source": "https://commons.wikimedia.org/wiki/File:Idyllic_landscape_with_a_waterfall_(Unsplash).jpg",
+      "originalSource": "https://unsplash.com/photos/zNN6ubHmruI",
+      "download": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Idyllic_landscape_with_a_waterfall_%28Unsplash%29.jpg/3840px-Idyllic_landscape_with_a_waterfall_%28Unsplash%29.jpg",
+      "license": "CC0 1.0 (Unsplash publication before 5 June 2017; verified on Wikimedia Commons)",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "DEMO 素材 · Robert Lukeman / Unsplash · CC0",
+      "changes": "Downloaded Wikimedia Commons 3840px resized version"
+    },
+    {
+      "file": "jordan-pond-panorama.jpg",
+      "title": "Jordan Pond / 约旦池 360°",
+      "author": "Matthew Petroff",
+      "dimensions": [4096,2048],
+      "type": "equirectangular",
+      "source": "https://github.com/mpetroff/pannellum/blob/master/examples/examplepano.jpg",
+      "download": "https://raw.githubusercontent.com/mpetroff/pannellum/master/examples/examplepano.jpg",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "licenseProvenance": "https://github.com/mpetroff/pannellum#license",
+      "authorProvenance": "https://github.com/mpetroff/pannellum/blob/master/examples/example.htm",
+      "attribution": "DEMO 全景 · Jordan Pond · Matthew Petroff · CC BY-SA 3.0",
+      "changes": "None; official example panorama downloaded"
+    }
+  ]
+}
