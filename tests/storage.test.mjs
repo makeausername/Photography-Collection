@@ -13,9 +13,28 @@ import { createStorage, storageConfig, cdnSignedURL } from '../lib/storage.mjs';
 import { displayImages, protectionSettings } from '../lib/image-protection.mjs';
 import { exportBackup } from '../lib/backup.mjs';
 import { acquireDataLock } from '../lib/runtime-lock.mjs';
+import { restoreBackup } from '../scripts/restore-backup.mjs';
+import { fileChecksum } from '../lib/offsite-backup.mjs';
 
 const config={provider:'oss',prefix:'portfolio',expires:300,publicBase:'https://images.example.com',cdnBase:'',bucket:'test-bucket',region:'oss-cn-hangzhou',accessKeyId:'test-only-key',accessKeySecret:'test-only-secret'};
 const env={STORAGE_PROVIDER:'oss',OSS_REGION:config.region,OSS_BUCKET:config.bucket,OSS_ACCESS_KEY_ID:config.accessKeyId,OSS_ACCESS_KEY_SECRET:config.accessKeySecret,OSS_PUBLIC_BASE_URL:config.publicBase};
+
+test('轻量备份保留云端引用；删除作品后图片保留至最后一份备份过期',async t=>{
+  const {dir,db,store,client}=await setup(t);
+  await store.put('uploads/a.webp',Buffer.from('photo'));
+  await store.put('uploads/profile-x.webp',Buffer.from('portrait'));
+  const snapshot={settings:{profilePhoto:true,profilePhotoKey:'uploads/profile-x.webp'},works:[{id:'a',image:'/uploads/a.webp',preview:'/uploads/a.webp'}],series:[]};db.save(snapshot);
+  await store.pinBackup('one',['uploads/a.webp']);await store.pinBackup('two',['uploads/a.webp']);
+  const chunks=[],res=new Writable({write(chunk,enc,done){chunks.push(chunk);done();}});res.set=res.attachment=()=>res;
+  await exportBackup(dir,structuredClone(snapshot),res,store,{mode:'references'});
+  const archive=path.join(dir,'reference.tar.gz');await writeFile(archive,Buffer.concat(chunks));
+  const key=db.asset('uploads/a.webp').objectKey;await store.remove('uploads/a.webp');assert.ok(client.objects.has(key));
+  const restored=path.join(dir,'restored');
+  await restoreBackup({archive,target:restored,sha256:await fileChecksum(archive),env,storageFactory:(directory,repository)=>createStorage(directory,repository,{config,client})});
+  const restoredDB=openPortfolio(restored);assert.equal(restoredDB.asset('uploads/a.webp').objectKey,key);assert.equal(restoredDB.load().settings.profilePhotoKey,'uploads/profile-x.webp');assert.ok(restoredDB.asset('uploads/profile-x.webp'));restoredDB.close();
+  await store.releaseBackup('one');assert.ok(client.objects.has(key));
+  await store.releaseBackup('two');assert.equal(client.objects.has(key),false);
+});
 function mockOSS() {
   const objects=new Map();
   return {

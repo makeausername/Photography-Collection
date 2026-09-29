@@ -58,6 +58,22 @@ test('中文后台上传、访问控制、持久化及删除', async t => {
     const pr = await request('/api/works', 'POST', form(eq, 'panorama')); assert.equal(pr.status, 201); pano = await pr.json();
     assert.equal((await request(photo.image)).status, 200); assert.equal((await request(pano.preview)).status, 200);
   });
+  await t.test('授权链接、筛选、全景分块和统计访问隔离',async()=>{
+    assert.equal((await request('/api/works/'+photo.id,'PUT',{vcgLicenseUrl:'javascript:alert(1)'})).status,400);
+    assert.equal((await request('/api/works/'+photo.id,'PUT',{vcgLicenseUrl:'https://example.com/photo',year:'2026',location:'四川'})).status,200);
+    const html=await request('/work/'+photo.id).then(r=>r.text());assert.match(html,/data-license/);assert.match(html,/ImageObject/);
+    assert.equal((await request('/api/library?location='+encodeURIComponent('四川')+'&year=2026').then(r=>r.json())).total,1);
+    assert.equal((await request('/api/library-facets').then(r=>r.json())).years.includes('2026'),true);
+    await request('/api/works/'+pano.id,'PUT',{panoramaMode:'tiles'});
+    assert.equal((await request('/api/panorama/'+pano.id).then(r=>r.json())).type,'multires');
+    const tile=await request('/panorama/'+pano.id+'/1/f/0/0.webp');assert.equal(tile.status,200);assert.equal((await sharp(Buffer.from(await tile.arrayBuffer())).metadata()).width,512);
+    assert.equal((await request('/panorama/'+pano.id+'/99/f/0/0.webp')).status,404);
+    await request('/api/works/'+pano.id,'PUT',{status:'draft'});assert.equal((await request('/panorama/'+pano.id+'/1/f/0/0.webp')).status,404);await request('/api/works/'+pano.id,'PUT',{status:'published',panoramaMode:'auto'});
+    assert.equal((await request('/api/admin/insights','GET',undefined,false)).status,401);
+    await request('/api/events','POST',{event:'view',work:photo.id},false);await request('/api/events','POST',{event:'view',work:photo.id},false);
+    assert.equal((await request('/api/admin/insights').then(r=>r.json())).totals.view,1);
+    assert.equal((await request('/api/events','POST',{event:'view',work:'missing'},false)).status,404);
+  });
   await t.test('编辑信息、顺序、网站名称', async () => {
     const edited = await request('/api/works/' + photo.id, 'PUT', { title: '<img src=x onerror=alert(1)>', category: '中文分类', description: '描述\n第二行', location: '测试地点' }); assert.equal(edited.status, 200);
     assert.equal((await request(`/api/works/${photo.id}/first`, 'POST', {})).status, 200);

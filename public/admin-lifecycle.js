@@ -29,20 +29,28 @@ async function trashAction(work,permanent){
 }
 function renderBackups(state){
   if(!state.running && $('#auto-backup-message').textContent.startsWith('正在备份'))$('#auto-backup-message').textContent=state.lastError || '备份已完成。';
-  const form=$('#auto-backup-form');if(!backupDirty){form.elements.enabled.value=state.settings.enabled?'on':'off';form.elements.hour.value=state.settings.hour;form.elements.keep.value=state.settings.keep;}
+  const form=$('#auto-backup-form');if(!backupDirty){form.elements.enabled.value=state.settings.enabled?'on':'off';form.elements.hour.value=state.settings.hour;form.elements.keep.value=state.settings.keep;form.elements.mode.value=state.settings.mode||'portable';form.elements.keepLocal.value=state.settings.keepLocal??state.settings.keep;form.elements.keepLocal.max=state.settings.keep;}
   for(const control of form.elements)control.disabled=state.running;
   $('#run-auto-backup').disabled=state.running;$('#run-auto-backup').textContent=state.running?'备份进行中…':'立即备份';
-  $('#backup-destination').textContent='保存位置：'+state.destination;
+  $('#backup-destination').textContent='本地：'+state.destination+(state.offsite?' · 异地：'+state.offsite.bucket:' · 尚未配置异地备份');
   $('#auto-backup-status').replaceChildren(node('p','最近完成：'+date(state.lastSuccess)),node('p',state.settings.enabled?'下次备份：'+date(state.nextRun)+'（北京时间）':'自动备份已关闭，可随时手动备份。'));
+  $('#backup-warning').hidden=!state.lastError;$('#backup-warning').textContent=state.lastError || '';
   if(state.lastError)$('#auto-backup-status').append(node('p',state.lastError,'form-message'));
   const history=$('#backup-history');history.replaceChildren();
-  for(const item of state.records){const row=node('div',undefined,'backup-history-row'),link=node('a','下载备份 ↓','text-link');link.href='/api/admin/backups/'+encodeURIComponent(item.name)+'/download';row.append(node('span',date(item.createdAt)),node('span',(item.bytes/1048576).toFixed(1)+' MB','field-help'),link);history.append(row);}
+  for(const item of state.records){const row=node('div',undefined,'backup-history-row'),link=node('a','下载备份 ↓','text-link');link.href='/api/admin/backups/'+encodeURIComponent(item.name)+'/download';row.append(node('span',date(item.createdAt)),node('span',(item.bytes/1048576).toFixed(1)+' MB','field-help'),link);const checksum=node('details'),summary=node('summary','校验与恢复');checksum.append(summary,node('code',item.sha256),node('p',item.mode==='references'?'轻量备份：需要保留云端图片。':'完整备份：包含图片，可独立恢复。','field-help'));row.append(checksum);history.append(row);}
   if(!state.records.length)history.append(node('p','还没有备份记录。','field-help'));
   clearTimeout(poll);if(state.running&&!document.hidden&&!$('#storage-panel').hidden)poll=setTimeout(loadBackups,2000);
 }
 async function loadBackups(){try{renderBackups(await context.api('/api/admin/backups'));}catch(error){$('#auto-backup-message').textContent=error.message;}}
 export function mountLifecycle(next){
   context=next;if($('#trash-dialog').open)renderTrash();if(initialized)return;initialized=true;
+  const alert=node('p','','admin-alert');alert.id='backup-warning';alert.hidden=true;$('#dashboard').prepend(alert);
+  const form=$('#auto-backup-form');
+  const modeLabel=node('label','备份内容'),mode=node('select');mode.name='mode';for(const [v,t]of [['portable','完整备份 · 包含全部图片'],['references','轻量备份 · 仅资料和云端图片引用']]){const o=node('option',t);o.value=v;mode.append(o);}modeLabel.append(mode);
+  const keepLabel=node('label','其中在本地保留'),keep=node('input');keep.name='keepLocal';keep.type='number';keep.min=1;keep.max=30;keep.value=7;keep.required=true;keepLabel.append(keep);
+  form.querySelector('button').before(modeLabel,keepLabel,node('p','轻量备份仅适用于全部图片已迁入 OSS 的作品库。系统保留备份引用的图片，过期后再清理；请勿在云控制台手动删除这些文件。','field-help'));
+  const guide=node('details',undefined,'backup-guidance');guide.append(node('summary','异地备份与恢复方法'),node('p','在服务器私有配置中填写备份专用 OSS Bucket 与密钥，重启后自动启用同步。同步成功后才清理旧副本。恢复时下载备份、保存校验值，在新目录运行恢复命令。具体步骤见仓库《备份与恢复.md》。'));$('#backup-history').after(guide);
+  loadBackups();
   $('#open-trash').onclick=async()=>{$('#trash-message').textContent='';try{const result=await context.api('/api/admin/trash');context.portfolio.trash=result.works;renderTrash();$('#trash-dialog').showModal();}catch(error){context.toast(error.message);}};
   $('#close-trash').onclick=()=>{if(!busy)$('#trash-dialog').close();};$('#trash-dialog').addEventListener('cancel',event=>{if(busy)event.preventDefault();});
   $('#replace-image-form').elements.photo.onchange=()=>{if(previewURL)URL.revokeObjectURL(previewURL);const file=$('#replace-image-form').elements.photo.files[0];previewURL=file?URL.createObjectURL(file):'';$('#replace-image-preview').hidden=!file;if(file)$('#replace-image-preview').src=previewURL;};
@@ -54,7 +62,7 @@ export function mountLifecycle(next){
   };
   $('[data-tab="storage-panel"]').addEventListener('click',loadBackups);$('#refresh-backups').onclick=loadBackups;
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('#storage-panel').hidden)loadBackups();});
-  $('#auto-backup-form').oninput=()=>{backupDirty=true;};
-  $('#auto-backup-form').onsubmit=async event=>{event.preventDefault();if(busy)return;busy=true;const form=event.target,button=form.querySelector('button');button.disabled=true;try{const state=await context.api('/api/admin/backups',context.json('PUT',{enabled:form.elements.enabled.value==='on',hour:Number(form.elements.hour.value),keep:Number(form.elements.keep.value)}));backupDirty=false;renderBackups(state);$('#auto-backup-message').textContent='备份计划已保存。';}catch(error){$('#auto-backup-message').textContent=error.message;}finally{busy=false;button.disabled=false;}};
+  $('#auto-backup-form').oninput=()=>{backupDirty=true;form.elements.keepLocal.max=Number(form.elements.keep.value)||30;};
+  $('#auto-backup-form').onsubmit=async event=>{event.preventDefault();if(busy)return;busy=true;const form=event.target,button=form.querySelector('button');button.disabled=true;try{const state=await context.api('/api/admin/backups',context.json('PUT',{enabled:form.elements.enabled.value==='on',hour:Number(form.elements.hour.value),keep:Number(form.elements.keep.value),keepLocal:Number(form.elements.keepLocal.value),mode:form.elements.mode.value}));backupDirty=false;renderBackups(state);$('#auto-backup-message').textContent='备份计划已保存。';}catch(error){$('#auto-backup-message').textContent=error.message;}finally{busy=false;button.disabled=false;}};
   $('#run-auto-backup').onclick=async()=>{const b=$('#run-auto-backup');b.disabled=true;try{await context.api('/api/admin/backups/run',context.json('POST',{}));$('#auto-backup-message').textContent='正在备份，期间请稍候再修改作品。';await loadBackups();}catch(error){$('#auto-backup-message').textContent=error.message;b.disabled=false;}};
 }

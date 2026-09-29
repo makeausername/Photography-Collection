@@ -1,4 +1,5 @@
 import { mountLifecycle, lifecycleDirty, beginReplacement, replacementBusy, replacementDirty } from './admin-lifecycle.js';
+import { mountInsights } from './admin-insights.js';
 import { mountStudio, studioDirty } from './admin-studio.js';
 import { orderedCategories } from './categories.js';
 
@@ -57,6 +58,7 @@ async function dashboard() {
   categories('#filter-category', '全部题材'); categories('#work-category', '请选择题材'); categories('#upload-category', '请选择题材'); categories('#batch-category', '请选择题材');
   for (const id of selectedIds) if (!portfolio.works.some(w => w.id === id)) selectedIds.delete(id);
   renderWorks();
+  mountInsights({api});
   mountStudio({portfolio,api,json,refresh:dashboard,toast});
   mountLifecycle({portfolio,api,json,refresh:dashboard,toast,editDirty:()=>editDirty,onReplaced:work=>{$('#edit-preview').src=work.preview;$('#edit-credit').textContent='';}});
 }
@@ -108,7 +110,9 @@ window.addEventListener('beforeunload',e=>{if(hasUnsaved()){e.preventDefault();e
 $('#logout').onclick=async()=>{if(hasUnsaved()&&!confirm('还有未保存的修改或未完成的上传，确定退出？'))return;try{await api('/api/logout',json('POST',{}));settingsDirty=editDirty=batchDirty=false;queue=[];location.reload();}catch(e){toast(e.message);}};
 function edit(work) {
   editingId=work.id;beginReplacement(work.id);editDirty=false;$('#work-form').reset();$('#edit-preview').src=work.preview;$('#edit-preview').alt=work.title;
-  for(const key of ['title','category','location','year','description','seriesId']) $('#work-form').elements[key].value=work[key]||'';
+  for(const key of ['title','category','location','year','description','seriesId','vcgLicenseUrl','tuchongLicenseUrl','panoramaMode']) $('#work-form').elements[key].value=work[key]||(key==='panoramaMode'?'auto':'');
+  $('#panorama-mode-field').hidden=$('#panorama-mode-help').hidden=work.kind!=='panorama';
+  $('#work-form .extra-fields summary').textContent=work.kind==='panorama'?'图片授权与全景设置':'图片授权';
   $('#work-form').elements.status.value=statusOf(work);$('#edit-credit').textContent=work.demo?'示例图片 · '+(work.credit||''):'';message($('#work-message'),'');$('#edit-dialog').showModal();
 }
 $('#work-form').oninput=()=>{editDirty=true;};

@@ -24,7 +24,7 @@ function editSeries(item){
   if(dirty&&!confirm('放弃未保存的系列修改？'))return;
   seriesId=item?.id||'';dirty=false;const form=$('#series-form');form.reset();$('#series-form-title').textContent=item?'编辑系列':'新建系列';
   $('#series-cover').replaceChildren(option('','使用第一幅作品'),...context.portfolio.works.filter(w=>w.seriesId===seriesId&&published(w)).map(w=>option(w.id,w.title)));
-  for(const key of ['title','description','status','coverWorkId'])if(item?.[key])form.elements[key].value=item[key];$('#series-message').textContent='';
+  for(const key of ['title','description','status','coverWorkId','location','period'])if(item?.[key])form.elements[key].value=item[key];$('#series-message').textContent='';
   const members=context.portfolio.works.filter(work=>work.seriesId===seriesId);
   seriesOrder=[...new Set([...(item?.workOrder || []).filter(id=>members.some(work=>work.id===id)),...members.map(work=>work.id)])];renderSeriesOrder();
 }
@@ -52,14 +52,17 @@ async function storage(){
     const info=await context.api('/api/admin/storage');
     $('#storage-mode').textContent=`作品资料：SQLite · 图片：${info.provider==='oss'?'阿里云 OSS':'本地存储'}${info.cdn?' · CDN 已配置':''}`;
     $('#retry-storage-cleanup').hidden=!info.pendingDeletes;
-    target.replaceChildren(...[['本地作品图片',info.sourceBytes],['本地缩略图',info.previewBytes],['本地展示缓存',info.cacheBytes],['磁盘剩余',info.freeBytes],...(info.provider==='oss'?[['OSS 作品文件',info.remoteBytes]]:[])].map(([label,value])=>{const card=node('div',undefined,'storage-card');card.append(node('span',label),node('strong',bytes(value)));return card;}));
-    target.append(node('p','本地展示缓存上限 512 MiB；闲置 7 天后自动清理。','field-help'));
+    target.replaceChildren(...[['本地作品图片',info.sourceBytes],['本地缩略图',info.previewBytes],['照片展示缓存',info.cacheBytes],['全景切片缓存',info.panoramaCacheBytes],['磁盘剩余',info.freeBytes],...(info.provider==='oss'?[['OSS 作品文件',info.remoteBytes]]:[])].map(([label,value])=>{const card=node('div',undefined,'storage-card');card.append(node('span',label),node('strong',bytes(value)));return card;}));
+    if(info.freeBytes!==null&&info.freeBytes<2*1024**3)target.append(node('p','磁盘剩余不足 2 GB，请及时清理或扩容。','admin-alert'));
+    target.append(node('p','照片展示缓存上限 512 MiB，全景切片缓存上限 256 MiB；闲置 7 天后自动清理。','field-help'));
     if(info.provider==='oss')target.append(node('p',`${info.bucket} · ${info.region}。这里只统计本站登记的作品文件，云端展示缓存和实际费用请在阿里云查看。`,'field-help'));
     if(info.pendingDeletes)target.append(node('p',`有 ${info.pendingDeletes} 个已删除作品的文件等待清理。`,'field-help'));
   }catch(error){target.replaceChildren(node('p',error.message));}
 }
 export function mountStudio(value){
-  context=value;mountHeroEditor(value);renderFeatured('photo');renderFeatured('panorama');renderSeries();
+  context=value;
+  if(!$('#series-form [name="location"]')) {const row=node('div',undefined,'form-row');for(const [name,label,placeholder]of [['location','旅途地点','例如：川西 · 甘孜'],['period','旅行时间','例如：2026 年秋']]){const l=node('label',label),input=node('input');input.name=name;input.maxLength=name==='location'?100:80;input.placeholder=placeholder;l.append(input);row.append(l);}$('#series-form [name="description"]').closest('label').before(row);$('#series-form [name="description"]').placeholder='记下这趟旅行里想留下的几件事。可以是一次等待、一段路，或拍下照片时的心情。';}
+  mountHeroEditor(value);renderFeatured('photo');renderFeatured('panorama');renderSeries();
   $('#profile-preview').hidden=!context.portfolio.settings.profilePhoto;if(context.portfolio.settings.profilePhoto)$('#profile-preview').src='/profile.webp';
   if(initialized)return;initialized=true;
   for(const kind of ['photo','panorama'])$('#add-featured-'+kind).onclick=()=>{const id=$('#choose-featured-'+kind).value;if(id)saveFeatured(kind,[...selected(kind),id]);};

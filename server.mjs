@@ -1,5 +1,8 @@
+import { offsiteBackup } from './lib/offsite-backup.mjs';
+import { panoramaConfig, panoramaTiles } from './lib/panorama-tiles.mjs';
+import { insights } from './lib/insights.mjs';
 import { resolveHeroSlides, parseHeroSlides, parseHeroPlayback } from './lib/hero.mjs';
-import { libraryPage, queryWorks, publicWork, publicSeries, siteData } from './lib/library.mjs';
+import { libraryPage, queryWorks, publicWork, publicSeries, siteData, workYear } from './lib/library.mjs';
 import { exportBackup, storageInfo } from './lib/backup.mjs';
 import { openPortfolio } from './lib/database.mjs';
 import { createStorage } from './lib/storage.mjs';
@@ -27,7 +30,9 @@ const uploads = path.join(dataDir, 'uploads');
 mkdirSync(uploads, { recursive: true });
 const repository = openPortfolio(dataDir);
 const storage = await createStorage(dataDir, repository);
+const stats = insights(dataDir);
 const displayImage = displayImages(uploads, path.join(dataDir, 'display-cache'), storage);
+const tileImage=panoramaTiles(path.join(dataDir,'panorama-cache'),displayImage,storage);
 const authPath = path.join(dataDir, 'admin.json');
 const app = express();
 app.disable('x-powered-by');
@@ -86,6 +91,20 @@ app.get('/api/portfolio', (req, res) => {
   const settings = { ...protectionSettings(db.settings), coverWorkId: works.some(w => w.id === db.settings.coverWorkId) ? db.settings.coverWorkId : '' };
   res.json({ settings, works });
 });
+app.post('/api/events',(req,res)=>{
+  const {work='',event}=req.body || {};
+  if(typeof work!=='string'||work.length>80||!['view','share','contact'].includes(event))return res.sendStatus(400);
+  if(work&&!db.works.some(w=>w.id===work&&published(w)))return res.sendStatus(404);
+  if(!isAdmin(req)&&req.get('DNT')!=='1')stats.record(work,event,req.ip || '');
+  res.sendStatus(204);
+});
+app.get('/api/admin/insights',admin,(req,res)=>res.json(stats.report(db.works)));
+app.get('/api/library-facets',(req,res)=>{
+  if(req.query.series&&!publicSeries(db).some(s=>s.id===req.query.series))return res.sendStatus(404);
+  const works=queryWorks(db,{kind:req.query.kind,series:req.query.series});
+  const values=key=>[...new Set(works.map(w=>key==='year'?workYear(w):w[key]).filter(Boolean))].sort((a,b)=>b.localeCompare(a,'zh-CN'));
+  res.json({locations:values('location'),years:values('year')});
+});
 app.get('/api/site', (req, res) => res.json(siteData(db, protectionSettings(db.settings))));
 app.get('/api/library', (req, res) => {
   if (req.query.series && !publicSeries(db).some(series => series.id === req.query.series)) return res.sendStatus(404);
@@ -94,7 +113,8 @@ app.get('/api/library', (req, res) => {
 app.get('/api/work/:id', (req, res) => {
   const work = db.works.find(work => work.id === req.params.id && published(work));
   if (!work) return res.sendStatus(404);
-  const works = queryWorks(db, { ...req.query, kind: work.kind });
+  const series = publicSeries(db).some(item=>item.id===req.query.series) ? req.query.series : pageSeries(work);
+  const works = queryWorks(db, { ...req.query, series, kind: work.kind });
   const index = works.findIndex(item => item.id === work.id);
   res.json({ work: publicWork(work), previous: index > 0 ? works[index - 1].id : null, next: index >= 0 && index < works.length - 1 ? works[index + 1].id : null, position: index + 1, total: works.length });
 });
@@ -130,16 +150,16 @@ app.get('/api/admin/backup', admin, async (req, res) => {
   catch { if (!res.headersSent) res.status(503).json({ error: '备份未完成，请检查磁盘空间及 tar 是否可用，再重新下载' }); else res.destroy(); }
   finally { exporting = false; }
 });
-const backups=await automaticBackups({dataDir,directory:process.env.BACKUP_DIR || undefined,snapshot:()=>db,storage,
+const backups=await automaticBackups({dataDir,directory:process.env.BACKUP_DIR || undefined,snapshot:()=>db,storage,offsite:await offsiteBackup(),
   acquire:manual=>{if(exporting||maintenance||activeWrites>(manual?1:0))return false;exporting=true;return true;},release:()=>{exporting=false;}});
 app.get('/api/admin/backups',admin,(req,res)=>res.json(backups.status()));
 app.put('/api/admin/backups',admin,async(req,res)=>{try{res.json(await backups.configure(req.body));}catch(error){res.status(400).json({error:error.message});}});
 app.post('/api/admin/backups/run',admin,(req,res)=>{if(!backups.start(true))return res.status(409).json({error:'正在保存或备份，请稍后重试'});res.status(202).json({ok:true});});
-app.get('/api/admin/backups/:name/download',admin,async(req,res)=>{try{res.set('Cache-Control','private, no-store');res.download(await backups.file(req.params.name));}catch{res.status(404).json({error:'备份文件不存在'});}});
+app.get('/api/admin/backups/:name/download',admin,async(req,res)=>{try{res.set('Cache-Control','private, no-store');res.download(await backups.file(req.params.name));}catch{try{const stream=await backups.remote(req.params.name);res.attachment(req.params.name);stream.on('error',()=>res.destroy());stream.pipe(res);}catch{res.status(404).json({error:'备份文件暂时无法读取，请检查异地存储配置'});}}});
 app.post('/api/series', admin, (req, res) => {
   const title = text(req.body.title, 80), status = req.body.status || 'draft';
   if (!title || !['draft', 'published'].includes(status)) return res.status(400).json({error:'请填写系列名称并选择发布状态'});
-  const entry = { id: randomUUID(), title, description: text(req.body.description, 1500), status };
+  const entry = { id: randomUUID(), title, location:text(req.body.location,100), period:text(req.body.period,80), description: text(req.body.description, 1500), status };
   save({ ...db, series: [...(db.series || []), entry] }); res.status(201).json(entry);
 });
 app.put('/api/series/:id', admin, (req, res) => {
@@ -151,7 +171,7 @@ app.put('/api/series/:id', admin, (req, res) => {
   if (coverWorkId && !db.works.some(work => work.id === coverWorkId && work.seriesId === current.id && published(work))) return res.status(400).json({error:'封面请选择该系列已发布的作品'});
   let workOrder=current.workOrder;
   if(req.body.workOrder!==undefined) {try{workOrder=parseSeriesOrder(req.body.workOrder,db.works,current.id);}catch(error){return res.status(409).json({error:error.message});}}
-  const updated = {...current, title, description:text(req.body.description,1500), status, coverWorkId,...(workOrder?{workOrder}:{})};
+  const updated = {...current, title, location:text(req.body.location,100), period:text(req.body.period,80), description:text(req.body.description,1500), status, coverWorkId,...(workOrder?{workOrder}:{})};
   save({...db,series:db.series.map(item=>item.id===current.id?updated:item)}); res.json(updated);
 });
 app.get('/api/admin/portfolio', admin, (req, res) => res.json({ ...db, settings: protectionSettings(db.settings), heroSlides: Array.isArray(db.settings.heroSlides) ? db.settings.heroSlides.filter(slide => db.works.some(work => work.id === slide.workId && work.kind === 'photo' && published(work))) : resolveHeroSlides(db) }));
@@ -175,12 +195,16 @@ app.post('/api/login', (req, res) => {
 });
 app.post('/api/logout', admin, (req, res) => { sessions.delete(token(req)); res.clearCookie('portfolio_session', { path: '/' }); res.json({ ok: true }); });
 function text(value, max = 200) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
+function pageSeries(work) { return publicSeries(db).some(s=>s.id===work.seriesId) ? work.seriesId : ''; }
 function workFields(body) {
   const title = text(body.title, 80), category = text(body.category, 40);
   if (!title || !category) throw new Error('请填写作品标题和分类');
   const seriesId = text(body.seriesId, 80);
   if (seriesId && !(db.series || []).some(series => series.id === seriesId)) throw Error('旅行系列不存在');
-  return { title, category, seriesId, description: text(body.description, 1500), location: text(body.location, 100), year: text(body.year, 20) };
+  const licensing={};
+  for(const key of ['vcgLicenseUrl','tuchongLicenseUrl']) { licensing[key]=text(body[key],500); if(licensing[key]&&!validSocialURL(licensing[key]))throw Error('授权链接请填写 HTTPS 地址'); }
+  const panoramaMode=body.panoramaMode || 'auto';if(!['auto','single','tiles'].includes(panoramaMode))throw Error('全景显示方式无效');
+  return { ...licensing, panoramaMode, title, category, seriesId, description: text(body.description, 1500), location: text(body.location, 100), year: text(body.year, 20) };
 }
 function workStatus(value, fallback = 'draft') {
   if (value === undefined) return fallback;
@@ -240,7 +264,7 @@ app.post('/api/works', admin, upload.single('photo'), async (req, res, next) => 
     save({ ...db, works: [work, ...db.works] }); res.status(201).json(work);
   } catch (error) {
     for (const file of [image, preview].filter(Boolean)) await storage.remove('uploads/'+file).catch(()=>{});
-    if (/标题|分类|状态|系列|Input|image|pixel|buffer|unsupported|corrupt/i.test(error.message)) return res.status(400).json({ error: /标题|分类|状态|系列/.test(error.message) ? error.message : '图片无法读取或像素过大，请导出为 JPG 后重试（最大 1.6 亿像素）' });
+    if (/标题|分类|状态|系列|授权|全景显示|Input|image|pixel|buffer|unsupported|corrupt/i.test(error.message)) return res.status(400).json({ error: /标题|分类|状态|系列|授权|全景显示/.test(error.message) ? error.message : '图片无法读取或像素过大，请导出为 JPG 后重试（最大 1.6 亿像素）' });
     next(error);
   } finally { if (uploadId) pendingUploads.delete(uploadId); }
 });
@@ -343,6 +367,17 @@ async function deliverImage(res,buffer,format,allowed=()=>true) {
   if(url)return res.redirect(302,url);
   res.type(type).send(buffer);
 }
+app.get('/api/panorama/:id',(req,res)=>{
+ const work=db.works.find(w=>w.id===req.params.id&&w.kind==='panorama'&&published(w));
+ if(!work)return res.sendStatus(404);res.json(panoramaConfig(work));
+});
+app.get('/panorama/:id/:level/:face/:x/:tile',async(req,res)=>{
+ res.set('Cache-Control','private, no-store');
+ const work=db.works.find(w=>w.id===req.params.id&&w.kind==='panorama'&&published(w));
+ if(!work||!/^\d+\.webp$/.test(req.params.tile))return res.sendStatus(404);
+ const settings=protectionSettings(db.settings),same=()=>db.works.some(w=>w.id===work.id&&w.image===work.image&&published(w))&&JSON.stringify(protectionSettings(db.settings))===JSON.stringify(settings);
+ try{const buffer=await tileImage(work,settings,{level:Number(req.params.level),face:req.params.face,x:Number(req.params.x),y:Number(req.params.tile.split('.')[0])});if(!same())return res.sendStatus(404);await deliverImage(res,buffer,'webp',same);}catch(error){res.sendStatus(error.message==='INVALID_TILE'?404:503);}
+});
 app.get('/media/:id/:variant', async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   const work = db.works.find(w => w.id === req.params.id && published(w));

@@ -1,8 +1,9 @@
+import { track } from './insights.js';
 import { shareEnvironment, sendToSystem } from './share-support.js';
 const $ = s => document.querySelector(s);
 let current, returnFocus, loadId=0;
 const environment = () => shareEnvironment(navigator.userAgent, typeof navigator.share === 'function', window.isSecureContext);
-export async function openShare(work) {return openShareEndpoint('/api/share/'+encodeURIComponent(work.id),'分享作品');}
+export async function openShare(work) {track('share',work.id);return openShareEndpoint('/api/share/'+encodeURIComponent(work.id),'分享作品');}
 async function openShareEndpoint(endpoint,heading) {
   $('#share-heading').textContent=heading;
   returnFocus=document.activeElement; const ticket=++loadId;
