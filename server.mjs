@@ -1,4 +1,5 @@
 import { offsiteBackup } from './lib/offsite-backup.mjs';
+import { mountJournal, journalEntries } from './lib/journal.mjs';
 import { panoramaConfig, panoramaTiles } from './lib/panorama-tiles.mjs';
 import { insights } from './lib/insights.mjs';
 import { resolveHeroSlides, parseHeroSlides, parseHeroPlayback } from './lib/hero.mjs';
@@ -84,7 +85,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: '64kb' }));
+app.use(express.json({ limit: '256kb' }));
 const published = work => work.status !== 'draft';
 app.get('/api/portfolio', (req, res) => {
   const works = db.works.filter(published).map(publicWork);
@@ -106,6 +107,7 @@ app.get('/api/library-facets',(req,res)=>{
   res.json({locations:values('location'),years:values('year')});
 });
 app.get('/api/site', (req, res) => res.json(siteData(db, protectionSettings(db.settings))));
+mountJournal(app,{admin,snapshot:()=>db,save,render:renderPublicPage,origin:req=>publicOrigin(req)});
 app.get('/api/library', (req, res) => {
   if (req.query.series && !publicSeries(db).some(series => series.id === req.query.series)) return res.sendStatus(404);
   res.json(libraryPage(db, req.query));
@@ -475,7 +477,7 @@ app.get('/series/:id', (req,res) => {
 });
 app.get('/robots.txt', (req,res) => res.type('text').send(`User-agent: *\nDisallow: /admin\nDisallow: /api/\nDisallow: /uploads/\nSitemap: ${publicOrigin(req)}/sitemap.xml\n`));
 app.get('/sitemap.xml', (req,res) => {
-  const urls = ['/', '/works', '/panoramas', '/about', ...db.works.filter(published).map(work=>'/work/'+encodeURIComponent(work.id)), ...publicSeries(db).map(series=>'/series/'+encodeURIComponent(series.id))];
+  const urls = ['/', '/works', '/panoramas', '/about', ...(journalEntries(db).length?['/journal',...journalEntries(db).map(entry=>'/journal/'+encodeURIComponent(entry.id))]:[]), ...db.works.filter(published).map(work=>'/work/'+encodeURIComponent(work.id)), ...publicSeries(db).map(series=>'/series/'+encodeURIComponent(series.id))];
   const escape = value => value.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
   res.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls.map(url=>'<url><loc>'+escape(publicOrigin(req)+url)+'</loc></url>').join('')+'</urlset>');
 });

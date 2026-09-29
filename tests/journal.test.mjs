@@ -1,0 +1,47 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import express from 'express';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { Writable } from 'node:stream';
+import { mountJournal, journalEntries, journalList, journalArticle } from '../lib/journal.mjs';
+import { renderPublicPage } from '../lib/public-pages.mjs';
+import { openPortfolio } from '../lib/database.mjs';
+import { exportBackup } from '../lib/backup.mjs';
+import { fileChecksum } from '../lib/offsite-backup.mjs';
+import { restoreBackup } from '../scripts/restore-backup.mjs';
+
+test('随记草稿隔离、发布版本、并发冲突、撤回和转义',async t=>{
+  let db={settings:{name:'作者'},works:[{id:'p',kind:'photo',status:'published',title:'照片'},{id:'hidden',status:'draft'}],series:[]};
+  const app=express();app.use(express.json());mountJournal(app,{admin:(req,res,next)=>req.get('x-admin')==='yes'?next():res.sendStatus(401),snapshot:()=>db,save:next=>{db=next;},render:renderPublicPage,origin:()=>base});
+  const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));const base='http://127.0.0.1:'+server.address().port;
+  const req=(url,method='GET',body,auth=true)=>fetch(base+url,{method,headers:{'Content-Type':'application/json',...(auth?{'x-admin':'yes'}:{})},body:body?JSON.stringify(body):undefined});
+  assert.equal((await req('/api/admin/journal','GET',null,false)).status,401);
+  assert.equal(journalList(db,{home:true}),'');
+  let entry=await req('/api/admin/journal','POST',{}).then(r=>r.json());const url='/api/admin/journal/'+entry.id;
+  assert.equal((await req('/journal/'+entry.id,'GET',null,false)).status,404);
+  assert.equal((await req('/admin/journal/'+entry.id+'/preview','GET',null,false)).status,401);
+  const draft={...entry.draft,title:'<script>草稿</script>',blocks:[{type:'text',text:'第一段\n下一行'},{type:'heading',text:'途中'},{type:'image',workId:'p',caption:'图注 <img>'}]};
+  entry=await req(url,'PUT',{revision:entry.revision,draft}).then(r=>r.json());
+  const preview=await req('/admin/journal/'+entry.id+'/preview');assert.match(preview.headers.get('cache-control'),/no-store/);assert.match(await preview.text(),/草稿预览/);
+  assert.equal((await req(url,'PUT',{revision:1,draft})).status,409);
+  assert.equal((await req(url,'PUT',{revision:entry.revision,draft:{...draft,coverWorkId:'hidden'},action:'publish'})).status,400);
+  entry=await req(url,'PUT',{revision:entry.revision,draft,action:'publish'}).then(r=>r.json());
+  let html=await req('/journal/'+entry.id,'GET',null,false).then(r=>r.text());assert.match(html,/&lt;script&gt;草稿/);assert.ok(!html.includes('<script>草稿'));assert.match(html,/第一段/);assert.match(html,/\/media\/p\/image/);
+  assert.equal((html.match(/<h1\b/g)||[]).length,1);assert.match(journalList(db,{home:true}),/阅读全文/);
+  entry=await req(url,'PUT',{revision:entry.revision,draft:{...draft,title:'尚未发布的修改'}}).then(r=>r.json());
+  html=await req('/journal/'+entry.id,'GET',null,false).then(r=>r.text());assert.ok(!html.includes('尚未发布的修改'));
+  db.works[0].status='draft';assert.ok(!journalArticle(db,journalEntries(db)[0]).includes('/media/p/'));
+  entry=await req(url,'PUT',{revision:entry.revision,draft:entry.draft,action:'unpublish'}).then(r=>r.json());assert.ok(entry.draft.title);assert.equal((await req('/journal/'+entry.id)).status,404);assert.equal(journalList(db,{home:true}),'');
+});
+test('纯文字随记及首页不再重复组图，备份恢复保留草稿和发布稿',async()=>{
+  const dir=await mkdtemp(path.join(tmpdir(),'journal-'));const repository=openPortfolio(dir);
+  const entry={id:'entry',revision:2,draft:{title:'待续',blocks:[{type:'text',text:'还在写'}]},live:{title:'一则随记',blocks:[{type:'text',text:'纯文字也可以。'}],publishedAt:new Date().toISOString()}};
+  const snapshot={settings:{name:'作者'},works:[],series:[],journal:[entry]};repository.save(snapshot);repository.close();
+  const reopened=openPortfolio(dir);assert.deepEqual(reopened.load().journal,[entry]);reopened.close();
+  const home=renderPublicPage('home',snapshot.settings,undefined,undefined,{db:snapshot,origin:'https://example.com'});assert.match(home,/id="journal"/);assert.ok(!home.includes('ON THE ROAD'));assert.ok(!home.includes('series-grid'));assert.ok(!journalArticle(snapshot,{...entry.live,id:entry.id}).includes('<img'));
+  const res=new Writable({write(chunk,enc,done){chunks.push(chunk);done();}}),chunks=[];res.set=res.attachment=()=>res;await exportBackup(dir,structuredClone(snapshot),res);
+  const archive=path.join(dir,'archive.tar.gz');await writeFile(archive,Buffer.concat(chunks));const target=path.join(dir,'restored');await restoreBackup({archive,target,sha256:await fileChecksum(archive)});
+  const restored=openPortfolio(target);assert.deepEqual(restored.load().journal,[entry]);restored.close();
+});

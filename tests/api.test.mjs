@@ -74,6 +74,20 @@ test('中文后台上传、访问控制、持久化及删除', async t => {
     assert.equal((await request('/api/admin/insights').then(r=>r.json())).totals.view,1);
     assert.equal((await request('/api/events','POST',{event:'view',work:'missing'},false)).status,404);
   });
+  await t.test('随记真实路由鉴权、图片可读及公开入口撤回',async()=>{
+    assert.equal((await request('/api/admin/journal','POST',{},false)).status,401);
+    assert.equal((await request('/api/admin/journal','POST',{},true,'https://example.com')).status,403);
+    let entry=await request('/api/admin/journal','POST',{}).then(r=>r.json());
+    const draft={...entry.draft,title:'测试随记',coverWorkId:photo.id,blocks:[{type:'text',text:'文章正文'},{type:'image',workId:photo.id,caption:'照片图注'}]};
+    entry=await request('/api/admin/journal/'+entry.id,'PUT',{revision:entry.revision,draft,action:'publish'}).then(r=>r.json());
+    const html=await request('/journal/'+entry.id).then(r=>r.text());assert.match(html,/文章正文/);
+    const source=html.match(/<figure>[\s\S]*?<img src="([^"]+)"/)[1];assert.equal((await request(source)).status,200);
+    const card=html.match(/property="og:image" content="([^"]+)"/)[1];assert.equal((await request(new URL(card).pathname)).status,200);
+    assert.match(await request('/').then(r=>r.text()),/id="journal"/);assert.ok((await request('/sitemap.xml').then(r=>r.text())).includes('/journal/'+entry.id));
+    assert.ok(!(await request('/api/site').then(r=>r.text())).includes('文章正文'));
+    await request('/api/admin/journal/'+entry.id,'PUT',{revision:entry.revision,draft,action:'unpublish'});
+    assert.equal((await request('/journal/'+entry.id)).status,404);assert.ok(!(await request('/').then(r=>r.text())).includes('id="journal"'));assert.ok(!(await request('/sitemap.xml').then(r=>r.text())).includes('/journal/'+entry.id));
+  });
   await t.test('编辑信息、顺序、网站名称', async () => {
     const edited = await request('/api/works/' + photo.id, 'PUT', { title: '<img src=x onerror=alert(1)>', category: '中文分类', description: '描述\n第二行', location: '测试地点' }); assert.equal(edited.status, 200);
     assert.equal((await request(`/api/works/${photo.id}/first`, 'POST', {})).status, 200);

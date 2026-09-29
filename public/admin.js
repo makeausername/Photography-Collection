@@ -1,5 +1,6 @@
 import { mountLifecycle, lifecycleDirty, beginReplacement, replacementBusy, replacementDirty } from './admin-lifecycle.js';
 import { mountInsights } from './admin-insights.js';
+import { mountJournalEditor, journalDirty } from './admin-journal.js';
 import { mountStudio, studioDirty } from './admin-studio.js';
 import { orderedCategories } from './categories.js';
 
@@ -59,6 +60,7 @@ async function dashboard() {
   for (const id of selectedIds) if (!portfolio.works.some(w => w.id === id)) selectedIds.delete(id);
   renderWorks();
   mountInsights({api});
+  mountJournalEditor({portfolio,api,json,toast});
   mountStudio({portfolio,api,json,refresh:dashboard,toast});
   mountLifecycle({portfolio,api,json,refresh:dashboard,toast,editDirty:()=>editDirty,onReplaced:work=>{$('#edit-preview').src=work.preview;$('#edit-credit').textContent='';}});
 }
@@ -105,7 +107,7 @@ $('#select-page').onchange = () => { const checked=$('#select-page').checked; co
 $('#clear-selection').onclick=()=>{selectedIds.clear();renderWorks();};
 for(const [id,step] of [['previous-page',-1],['next-page',1]]) $('#' + id).onclick=()=>{pageNumber+=step;renderWorks();$('.library-filters').scrollIntoView({block:'start'});};
 for (const button of document.querySelectorAll('[data-tab]')) button.onclick=()=>{for(const item of document.querySelectorAll('[data-tab]')) item.classList.toggle('active',item===button);for(const panel of document.querySelectorAll('.admin-panel')) panel.hidden=panel.id!==button.dataset.tab;};
-function hasUnsaved() { return lifecycleDirty() || studioDirty() || settingsDirty || editDirty || batchDirty || uploading || queue.some(i=>i.state!=='done'); }
+function hasUnsaved() { return journalDirty() || lifecycleDirty() || studioDirty() || settingsDirty || editDirty || batchDirty || uploading || queue.some(i=>i.state!=='done'); }
 window.addEventListener('beforeunload',e=>{if(hasUnsaved()){e.preventDefault();e.returnValue='';}});
 $('#logout').onclick=async()=>{if(hasUnsaved()&&!confirm('还有未保存的修改或未完成的上传，确定退出？'))return;try{await api('/api/logout',json('POST',{}));settingsDirty=editDirty=batchDirty=false;queue=[];location.reload();}catch(e){toast(e.message);}};
 function edit(work) {
