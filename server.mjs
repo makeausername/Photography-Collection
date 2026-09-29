@@ -214,7 +214,7 @@ function workStatus(value, fallback = 'draft') {
   return value;
 }
 const pendingUploads = new Set();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1, fields: 14 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024, files: 1, fields: 14 } });
 app.post('/api/profile-photo', admin, upload.single('photo'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({error:'请选择照片'});
@@ -485,7 +485,7 @@ app.use(express.static(path.join(root, 'public'), { maxAge: 0 }));
 app.use('/api', (req, res) => res.status(404).json({ error: '接口不存在' }));
 app.use((req,res) => res.status(404).type('html').send(renderPublicPage('notfound',db.settings)));
 app.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? '图片不能超过 64 MB' : '上传内容不符合要求，请每次选择一张照片' });
+  if (error instanceof multer.MulterError) return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? '图片不能超过 200 MB' : '上传内容不符合要求，请每次选择一张照片' });
   if (error.type === 'entity.too.large' || error instanceof SyntaxError) return res.status(400).json({ error: '请求内容无效或过大' });
   // SDK errors may contain signed URLs or credentials; never echo/log the raw error.
   console.error('请求失败:', error instanceof multer.MulterError ? 'upload' : 'storage-or-server'); res.status(500).json({ error: '保存失败，请检查存储连接和可用空间后重试' });
@@ -506,7 +506,9 @@ for (const work of db.works) {
 }
 if (dimensionsChanged) save(db);
 const port = Number(process.env.PORT || 4173), host = process.env.HOST || '127.0.0.1';
-app.listen(port, host, () => console.log(`摄影作品集已启动：http://${host}:${port}\n中文后台：http://${host}:${port}/admin`));
+const httpServer = app.listen(port, host, () => console.log(`摄影作品集已启动：http://${host}:${port}\n中文后台：http://${host}:${port}/admin`));
+// Allow large uploads over slower connections (Node defaults to five minutes).
+httpServer.requestTimeout = 20 * 60 * 1000;
 backups.listen();
 async function cleanExpiredTrash(){
   if(exporting||maintenance||activeWrites)return;

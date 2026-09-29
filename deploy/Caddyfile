@@ -2,7 +2,7 @@
     encode zstd gzip
     header X-Kosmo-Instance {$DEPLOYMENT_ID}
     request_body {
-        max_size 66MB
+        max_size 210MiB
     }
     reverse_proxy portfolio:4173 {
         header_up X-Forwarded-For {remote_host}

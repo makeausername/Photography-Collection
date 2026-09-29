@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import sharp from 'sharp';
+import { Readable } from 'node:stream';
 const root = path.resolve(import.meta.dirname, '..');
 const base = 'http://127.0.0.1:4187';
 const password = randomBytes(24).toString('hex');
@@ -50,6 +51,33 @@ test('中文后台上传、访问控制、持久化及删除', async t => {
   const jpeg = await sharp({ create: { width: 1200, height: 800, channels: 3, background: '#416d52' } }).jpeg().toBuffer();
   const eq = await sharp({ create: { width: 2048, height: 1024, channels: 3, background: '#5686ac' } }).jpeg().toBuffer();
   function form(buffer, kind) { const f = new FormData(); f.set('photo', new Blob([buffer], { type: 'image/jpeg' }), '测试.jpg'); f.set('title', '中文作品'); f.set('category', '测试分类'); f.set('kind', kind); f.set('status', 'published'); f.set('allowDuplicate', 'true'); return f; }
+  await t.test('200 MB 照片可上传并压缩，超过一字节拒绝', async () => {
+    // Stream a small valid JPEG with padding: exercise the real multipart boundary
+    // without allocating another 200 MiB fixture in the test process.
+    async function paddedUpload(size) {
+      const boundary = 'photo-size-boundary';
+      const head = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="title"\r\n\r\n大小测试\r\n--${boundary}\r\nContent-Disposition: form-data; name="category"\r\n\r\n测试\r\n--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="large.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`);
+      const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+      const padding = Buffer.alloc(64 * 1024);
+      async function* body() {
+        yield head; yield jpeg;
+        for (let left = size - jpeg.length; left > 0; left -= padding.length) yield padding.subarray(0, Math.min(left, padding.length));
+        yield tail;
+      }
+      return fetch(base + '/api/works', {method:'POST', duplex:'half', headers:{Origin:base, Cookie:cookie, 'Content-Type':`multipart/form-data; boundary=${boundary}`, 'Content-Length':String(head.length + size + tail.length)}, body:Readable.from(body())});
+    }
+    const accepted = await paddedUpload(200 * 1024 * 1024);
+    assert.equal(accepted.status, 201);
+    const work = await accepted.json();
+    const stored = await request(work.image);
+    assert.equal(stored.status, 200);
+    assert.ok((await stored.arrayBuffer()).byteLength < 1024 * 1024);
+    const rejected = await paddedUpload(200 * 1024 * 1024 + 1);
+    assert.equal(rejected.status, 400);
+    assert.equal((await rejected.json()).error, '图片不能超过 200 MB');
+    assert.equal((await request('/api/works/'+work.id, 'DELETE')).status, 200);
+    assert.equal((await request('/api/admin/trash/'+work.id, 'DELETE', {confirm:true})).status, 200);
+  });
   await t.test('验证图片格式及全景比例', async () => {
     assert.equal((await request('/api/works', 'POST', form(jpeg, 'photo'), false)).status, 401);
     assert.equal((await request('/api/works', 'POST', form(jpeg, 'panorama'))).status, 400);
